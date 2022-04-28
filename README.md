@@ -1,0 +1,1 @@
+Simplified alternative to https://github.com/stereolabs/zed-ros2-wrapper with a focus on image acquisition.
