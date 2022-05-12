@@ -27,18 +27,17 @@ void declare_integer_range(
 }
 
 void set_rect_parameter(const rclcpp::Parameter& parameter, size_t prefix, sl::Rect& rect) {
-  size_t field_start = prefix + 1;
-  if (parameter.get_name().find("x", field_start) == field_start) {
-    rect.x = parameter.get_value<double>();
+  if (parameter.get_name().find("x", prefix) == prefix) {
+    rect.x = parameter.get_value<int>();
   }
-  if (parameter.get_name().find("y", field_start) == field_start) {
-    rect.y = parameter.get_value<double>();
+  if (parameter.get_name().find("y", prefix) == prefix) {
+    rect.y = parameter.get_value<int>();
   }
-  if (parameter.get_name().find("width", field_start) == field_start) {
-    rect.width = parameter.get_value<double>();
+  if (parameter.get_name().find("width", prefix) == prefix) {
+    rect.width = parameter.get_value<int>();
   }
-  if (parameter.get_name().find("height", field_start) == field_start) {
-    rect.height = parameter.get_value<double>();
+  if (parameter.get_name().find("height", prefix) == prefix) {
+    rect.height = parameter.get_value<int>();
   }
 }
 

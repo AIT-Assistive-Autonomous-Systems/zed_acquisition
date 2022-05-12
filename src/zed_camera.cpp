@@ -151,6 +151,14 @@ public:
     declare_parameter("video.aec_agc", true);
     declare_parameter("video.auto_whitebalance", true);
 
+    for (const auto& field : {"x", "y", "width", "height"}) {
+      for (const auto& side : {"left", "right"}) {
+        std::stringstream ss;
+        ss << "video.aec_agc_roi." << side << "." << field;
+        declare_parameter(ss.str(), 0);
+      }
+    }
+
     pub_left_image_rect_color_ = image_transport::create_camera_publisher(
         this, "left/image_rect_color", rmw_qos_profile_sensor_data);
 
@@ -198,61 +206,73 @@ public:
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
 
-    bool roi_left_dirty, roi_right_dirty = false;
+    bool roi_left_dirty = false;
+    bool roi_right_dirty = false;
 
     for (const auto & parameter : parameters) {
       if (parameter.get_name() == "video.aec_agc") {
+        RCLCPP_INFO(get_logger(), "Set AEC_AGC %i", parameter.as_bool());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, parameter.as_bool());
       }
       if (parameter.get_name() == "video.gain") {
+        RCLCPP_INFO(get_logger(), "Set GAIN %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::GAIN, parameter.as_int());
       }
       if (parameter.get_name() == "video.exposure") {
+        RCLCPP_INFO(get_logger(), "Set EXPOSURE %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE, parameter.as_int());
       }
       if (parameter.get_name() == "video.brightness") {
+        RCLCPP_INFO(get_logger(), "Set BRIGHTNESS %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::BRIGHTNESS, parameter.as_int());
       }
       if (parameter.get_name() == "video.whitebalance_auto") {
+        RCLCPP_INFO(get_logger(), "Set WHITEBALANCE_AUTO %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, parameter.as_int());
       }
       if (parameter.get_name() == "video.whitebalance_temperature") {
+        RCLCPP_INFO(get_logger(), "Set WHITEBALANCE_TEMPERATURE %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, parameter.as_int());
       }
       if (parameter.get_name() == "video.gamma") {
+        RCLCPP_INFO(get_logger(), "Set GAMMA %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::GAMMA, parameter.as_int());
       }
       if (parameter.get_name() == "video.sharpness") {
+        RCLCPP_INFO(get_logger(), "Set SHARPNESS %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, parameter.as_int());
       }
       if (parameter.get_name() == "video.hue") {
+        RCLCPP_INFO(get_logger(), "Set HUE %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::HUE, parameter.as_int());
       }
       if (parameter.get_name() == "video.saturation") {
+        RCLCPP_INFO(get_logger(), "Set SATURATION %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, parameter.as_int());
       }
       if (parameter.get_name() == "video.contrast") {
+        RCLCPP_INFO(get_logger(), "Set CONTRAST %i", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::CONTRAST, parameter.as_int());
       }
 
-      const std::string left_rect_prefix = "video.aec_agc_roi.left";
+      const std::string left_rect_prefix = "video.aec_agc_roi.left.";
       if (parameter.get_name().find(left_rect_prefix) == 0) {
         set_rect_parameter(parameter, left_rect_prefix.size(), aec_agc_roi_left_);
         roi_left_dirty = true;
       }
-      const std::string right_rect_prefix = "video.aec_agc_roi.right";
-      if (parameter.get_name().find(right_rect_prefix) == 1) {
+      const std::string right_rect_prefix = "video.aec_agc_roi.right.";
+      if (parameter.get_name().find(right_rect_prefix) == 0) {
         set_rect_parameter(parameter, right_rect_prefix.size(), aec_agc_roi_right_);
         roi_right_dirty = true;
       }
     }
 
     if (roi_left_dirty) {
-      RCLCPP_INFO(get_logger(), "Set AEC_AGX_ROI left to %.2fx%.2f@(%.2f,%.2f)", aec_agc_roi_left_.width, aec_agc_roi_left_.height, aec_agc_roi_left_.x, aec_agc_roi_left_.y);
+      RCLCPP_INFO(get_logger(), "Set AEC_AGX_ROI left to %lux%lu@(%lu,%lu)", aec_agc_roi_left_.width, aec_agc_roi_left_.height, aec_agc_roi_left_.x, aec_agc_roi_left_.y);
       zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, aec_agc_roi_left_, sl::SIDE::LEFT);
     }
     if (roi_right_dirty) {
-      RCLCPP_INFO(get_logger(), "Set AEC_AGX_ROI right to %.2fx%.2f@(%.2f,%.2f)", aec_agc_roi_right_.width, aec_agc_roi_right_.height, aec_agc_roi_right_.x, aec_agc_roi_right_.y);
+      RCLCPP_INFO(get_logger(), "Set AEC_AGX_ROI right to %lux%lu@(%lu,%lu)", aec_agc_roi_right_.width, aec_agc_roi_right_.height, aec_agc_roi_right_.x, aec_agc_roi_right_.y);
       zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, aec_agc_roi_right_, sl::SIDE::RIGHT);
     }
     return result;
