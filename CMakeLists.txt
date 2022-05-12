@@ -27,9 +27,11 @@ find_package(sensor_msgs REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
+find_package(cv_bridge REQUIRED)
 
 add_library(${PROJECT_NAME} SHARED
   src/zed_camera.cpp
+  src/image_encode.cpp
 )
 target_link_libraries(${PROJECT_NAME}
   ${ZED_LIBRARIES}
@@ -52,10 +54,13 @@ ament_target_dependencies(${PROJECT_NAME}
   "image_transport"
   "diagnostic_msgs"
   "diagnostic_updater"
+  "cv_bridge"
 )
 
 rclcpp_components_register_node(${PROJECT_NAME} PLUGIN "zed_acquisition::ZedCamera" EXECUTABLE zed_camera_node)
+rclcpp_components_register_node(${PROJECT_NAME} PLUGIN "zed_acquisition::ImageEncode" EXECUTABLE image_encode_node)
 set_target_properties(zed_camera_node PROPERTIES OUTPUT_NAME "zed_camera")
+set_target_properties(image_encode_node PROPERTIES OUTPUT_NAME "image_encode")
 
 install(TARGETS ${PROJECT_NAME}
   ARCHIVE DESTINATION lib
