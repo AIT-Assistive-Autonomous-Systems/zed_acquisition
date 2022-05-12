@@ -15,6 +15,7 @@ endif()
 find_package(CUDA REQUIRED)
 
 find_package(ament_cmake REQUIRED)
+find_package(angles REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(builtin_interfaces REQUIRED)
@@ -39,6 +40,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   ${CUDA_INCLUDE_DIRS}
   ${ZED_INCLUDE_DIRS})
 ament_target_dependencies(${PROJECT_NAME}
+  "angles"
   "rclcpp"
   "rclcpp_components"
   "builtin_interfaces"
