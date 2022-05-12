@@ -9,8 +9,8 @@
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
 
+#include <image_transport/image_transport.hpp>
 #include <image_transport/camera_publisher.hpp>
-#include <image_transport/publisher.hpp>
 
 #include <sl/Camera.hpp>
 #include "parameters.hpp"
@@ -118,20 +118,19 @@ public:
     }
 
     auto camera_info = zed_.getCameraInformation();
-    std::string camera_model = sl::toString(camera_info.camera_model).c_str();
-    RCLCPP_INFO(get_logger(), "Camera model %s", camera_model.c_str());
+    std::string camera_name = "zed2i";
 
     left_camera_optical_frame_ = declare_parameter(
       "left_camera_optical_frame",
-      camera_model + "_left_camera_optical_frame");
+      camera_name + "_left_camera_optical_frame");
 
     right_camera_optical_frame_ = declare_parameter(
       "right_camera_optical_frame",
-      camera_model + "_right_camera_optical_frame");
+      camera_name + "_right_camera_optical_frame");
 
-    imu_frame_ = declare_parameter("imu_frame", camera_model + "_imu_link");
-    barometer_frame_ = declare_parameter("barometer_frame", camera_model + "_left_camera_frame");
-    magnetometer_frame_ = declare_parameter("magnetometer_frame", camera_model + "_imu_link");
+    imu_frame_ = declare_parameter("imu_frame", camera_name + "_imu_link");
+    barometer_frame_ = declare_parameter("barometer_frame", camera_name + "_left_camera_frame");
+    magnetometer_frame_ = declare_parameter("magnetometer_frame", camera_name + "_imu_link");
 
     diagnostic_updater_.add("ZED Diagnostic", this, &ZedCamera::callback_diagnostic);
     diagnostic_updater_.setHardwareID("ZED camera");
@@ -146,12 +145,17 @@ public:
     declare_integer_range(get_node_parameters_interface(), "video.sharpness", 4, 0, 8);
     declare_integer_range(get_node_parameters_interface(), "video.hue", 0, 0, 8);
     declare_integer_range(get_node_parameters_interface(), "video.saturation", 4, 0, 8);
-    declare_integer_range(get_node_parameters_interface(), "video.sharpness", 4, 0, 8);
     declare_integer_range(get_node_parameters_interface(), "video.gamma", 8, 0, 8);
     declare_integer_range(get_node_parameters_interface(), "video.exposure", 80, 0, 100);
     declare_integer_range(get_node_parameters_interface(), "video.gain", 80, 0, 100);
     declare_parameter("video.aec_agc", true);
     declare_parameter("video.auto_whitebalance", true);
+
+    pub_left_image_rect_color_ = image_transport::create_camera_publisher(
+        this, "left/image_rect_color", rmw_qos_profile_sensor_data);
+
+    pub_right_image_rect_color_ = image_transport::create_camera_publisher(
+        this, "right/image_rect_color", rmw_qos_profile_sensor_data);
 
     if (camera_info.camera_model != sl::MODEL::ZED) {
       pub_imu_ = create_publisher<Imu>("imu/data", rclcpp::SensorDataQoS());
@@ -244,9 +248,11 @@ public:
     }
 
     if (roi_left_dirty) {
+      RCLCPP_INFO(get_logger(), "Set AEC_AGX_ROI left to %.2fx%.2f@(%.2f,%.2f)", aec_agc_roi_left_.width, aec_agc_roi_left_.height, aec_agc_roi_left_.x, aec_agc_roi_left_.y);
       zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, aec_agc_roi_left_, sl::SIDE::LEFT);
     }
     if (roi_right_dirty) {
+      RCLCPP_INFO(get_logger(), "Set AEC_AGX_ROI right to %.2fx%.2f@(%.2f,%.2f)", aec_agc_roi_right_.width, aec_agc_roi_right_.height, aec_agc_roi_right_.x, aec_agc_roi_right_.y);
       zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, aec_agc_roi_right_, sl::SIDE::RIGHT);
     }
     return result;
@@ -307,7 +313,7 @@ public:
       auto sensor_fw_version = camera_info.sensors_configuration.firmware_version;
       RCLCPP_INFO_STREAM(
         get_logger(),
-        "Sensors FW Version -> " << sensor_fw_version);
+        "Sensors FW Version '" << sensor_fw_version << "'");
     }
     return true;
   }
