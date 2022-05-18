@@ -21,20 +21,20 @@ private:
 public:
   explicit ImageEncode(const rclcpp::NodeOptions & = rclcpp::NodeOptions());
 
-  void image_callback(const Image::ConstSharedPtr &);
+  void image_callback(const Image::ConstSharedPtr);
 };
 
 ImageEncode::ImageEncode(const rclcpp::NodeOptions & options)
 : rclcpp::Node("image_encode", options)
 {
   pub_out_ = create_publisher<Image>("~/out", rclcpp::SensorDataQoS());
-//   sub_in_ = create_subscription<Image>(
-//     "~/in", rclcpp::SensorDataQoS(),
-//     std::bind(&ImageEncode::image_callback, this, _1));
+  sub_in_ = create_subscription<Image>(
+    "~/in", rclcpp::SensorDataQoS(),
+    std::bind(&ImageEncode::image_callback, this, _1));
   declare_parameter("encoding", enc::BGR8);
 }
 
-void ImageEncode::image_callback(const Image::ConstSharedPtr & img)
+void ImageEncode::image_callback(const Image::ConstSharedPtr img)
 {
   auto cv_img = cv_bridge::toCvShare(img, get_parameter("encoding").as_string());
   auto encoded_msg = cv_img->toImageMsg();
