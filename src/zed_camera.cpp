@@ -215,43 +215,43 @@ public:
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, parameter.as_bool());
       }
       if (parameter.get_name() == "video.gain") {
-        RCLCPP_INFO(get_logger(), "Set GAIN %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set GAIN %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::GAIN, parameter.as_int());
       }
       if (parameter.get_name() == "video.exposure") {
-        RCLCPP_INFO(get_logger(), "Set EXPOSURE %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set EXPOSURE %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE, parameter.as_int());
       }
       if (parameter.get_name() == "video.brightness") {
-        RCLCPP_INFO(get_logger(), "Set BRIGHTNESS %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set BRIGHTNESS %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::BRIGHTNESS, parameter.as_int());
       }
       if (parameter.get_name() == "video.whitebalance_auto") {
-        RCLCPP_INFO(get_logger(), "Set WHITEBALANCE_AUTO %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set WHITEBALANCE_AUTO %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, parameter.as_int());
       }
       if (parameter.get_name() == "video.whitebalance_temperature") {
-        RCLCPP_INFO(get_logger(), "Set WHITEBALANCE_TEMPERATURE %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set WHITEBALANCE_TEMPERATURE %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, parameter.as_int());
       }
       if (parameter.get_name() == "video.gamma") {
-        RCLCPP_INFO(get_logger(), "Set GAMMA %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set GAMMA %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::GAMMA, parameter.as_int());
       }
       if (parameter.get_name() == "video.sharpness") {
-        RCLCPP_INFO(get_logger(), "Set SHARPNESS %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set SHARPNESS %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, parameter.as_int());
       }
       if (parameter.get_name() == "video.hue") {
-        RCLCPP_INFO(get_logger(), "Set HUE %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set HUE %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::HUE, parameter.as_int());
       }
       if (parameter.get_name() == "video.saturation") {
-        RCLCPP_INFO(get_logger(), "Set SATURATION %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set SATURATION %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, parameter.as_int());
       }
       if (parameter.get_name() == "video.contrast") {
-        RCLCPP_INFO(get_logger(), "Set CONTRAST %i", parameter.as_int());
+        RCLCPP_INFO(get_logger(), "Set CONTRAST %li", parameter.as_int());
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::CONTRAST, parameter.as_int());
       }
 
