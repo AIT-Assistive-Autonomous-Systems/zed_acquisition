@@ -23,7 +23,7 @@ void declare_integer_range(
   range.to_value = high;
   range.step = 1;
   descriptor.integer_range.push_back(range);
-  parameters->declare_parameter(name, rclcpp::ParameterValue(4), descriptor);
+  parameters->declare_parameter(name, rclcpp::ParameterValue(default_value), descriptor);
 }
 
 void set_rect_parameter(const rclcpp::Parameter& parameter, size_t prefix, sl::Rect& rect) {
