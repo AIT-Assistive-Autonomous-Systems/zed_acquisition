@@ -40,6 +40,7 @@ private:
 
   image_transport::CameraPublisher pub_left_image_rect_color_;
   image_transport::CameraPublisher pub_right_image_rect_color_;
+  image_transport::Publisher pub_left_depth_;
 
   rclcpp::Publisher<Imu>::SharedPtr pub_imu_;
   rclcpp::Publisher<FluidPressure>::SharedPtr pub_atm_press_;
@@ -91,7 +92,7 @@ public:
 
     init_params.coordinate_system = sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD;
     init_params.coordinate_units = sl::UNIT::METER;
-    init_params.depth_mode = sl::DEPTH_MODE::NONE;
+    init_params.depth_mode = static_cast<sl::DEPTH_MODE>(declare_parameter("depth.depth_mode", 0));
     init_params.sdk_verbose = declare_parameter("general.sdk_verbose", false);
 
     int gpu_id = declare_parameter("general.gpu_id", 0);
@@ -151,8 +152,8 @@ public:
     declare_parameter("video.aec_agc", true);
     declare_parameter("video.auto_whitebalance", true);
 
-    for (const auto& field : {"x", "y", "width", "height"}) {
-      for (const auto& side : {"left", "right"}) {
+    for (const auto & field : {"x", "y", "width", "height"}) {
+      for (const auto & side : {"left", "right"}) {
         std::stringstream ss;
         ss << "video.aec_agc_roi." << side << "." << field;
         declare_parameter(ss.str(), 0);
@@ -160,10 +161,15 @@ public:
     }
 
     pub_left_image_rect_color_ = image_transport::create_camera_publisher(
-        this, "left/image_rect_color", rmw_qos_profile_sensor_data);
+      this, "left/image_rect_color", rmw_qos_profile_sensor_data);
 
     pub_right_image_rect_color_ = image_transport::create_camera_publisher(
-        this, "right/image_rect_color", rmw_qos_profile_sensor_data);
+      this, "right/image_rect_color", rmw_qos_profile_sensor_data);
+
+    if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
+      pub_left_depth_ = image_transport::create_publisher(
+        this, "left/depth", rmw_qos_profile_sensor_data);
+    }
 
     if (camera_info.camera_model != sl::MODEL::ZED) {
       pub_imu_ = create_publisher<Imu>("imu/data", rclcpp::SensorDataQoS());
@@ -268,11 +274,15 @@ public:
     }
 
     if (roi_left_dirty) {
-      RCLCPP_INFO(get_logger(), "Set AEC_AGX_ROI left to %lux%lu@(%lu,%lu)", aec_agc_roi_left_.width, aec_agc_roi_left_.height, aec_agc_roi_left_.x, aec_agc_roi_left_.y);
+      RCLCPP_INFO(
+        get_logger(), "Set AEC_AGX_ROI left to %lux%lu@(%lu,%lu)", aec_agc_roi_left_.width, aec_agc_roi_left_.height, aec_agc_roi_left_.x,
+        aec_agc_roi_left_.y);
       zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, aec_agc_roi_left_, sl::SIDE::LEFT);
     }
     if (roi_right_dirty) {
-      RCLCPP_INFO(get_logger(), "Set AEC_AGX_ROI right to %lux%lu@(%lu,%lu)", aec_agc_roi_right_.width, aec_agc_roi_right_.height, aec_agc_roi_right_.x, aec_agc_roi_right_.y);
+      RCLCPP_INFO(
+        get_logger(), "Set AEC_AGX_ROI right to %lux%lu@(%lu,%lu)", aec_agc_roi_right_.width, aec_agc_roi_right_.height, aec_agc_roi_right_.x,
+        aec_agc_roi_right_.y);
       zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, aec_agc_roi_right_, sl::SIDE::RIGHT);
     }
     return result;
@@ -457,7 +467,7 @@ public:
 
     auto calibration_params = camera_info.camera_configuration.calibration_parameters;
 
-    sl::Mat mat_left, mat_right;
+    sl::Mat mat_left, mat_right, mat_depth;
     sl::ERROR_CODE retrieve_result;
 
     retrieve_result = zed_.retrieveImage(
@@ -474,6 +484,20 @@ public:
     if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
       RCLCPP_ERROR(get_logger(), "Retrieve right failed");
       return;
+    }
+
+    if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
+      retrieve_result = zed_.retrieveMeasure(
+        mat_depth, sl::MEASURE::DEPTH, sl::MEM::CPU,
+        camera_info.camera_configuration.resolution);
+      if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
+        RCLCPP_ERROR(get_logger(), "Retrieve depth failed");
+        return;
+      }
+      if (mat_depth.getDataType() != sl::MAT_TYPE::F32_C1) {
+        RCLCPP_ERROR(get_logger(), "depth image is not float32");
+        return;
+      }
     }
 
     static int frame_count = -1;
@@ -499,6 +523,15 @@ public:
     auto right_camera_info = getCameraInfo(calibration_params, sl::SIDE::RIGHT);
     right_camera_info->header = right_rect_msg->header;
     pub_right_image_rect_color_.publish(right_rect_msg, right_camera_info);
+
+    if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
+      auto depth_ts =
+        rclcpp::Time(mat_depth.timestamp.getNanoseconds(), get_clock()->get_clock_type());
+      auto depth_msg = toMsg(mat_depth);
+      depth_msg->header.frame_id = left_camera_optical_frame_;
+      depth_msg->header.stamp = depth_ts;
+      pub_left_depth_.publish(depth_msg);
+    }
   }
 
   void callback_diagnostic(
