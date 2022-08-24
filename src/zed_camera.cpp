@@ -90,6 +90,7 @@ public:
       init_params.input.setFromSerialNumber(serial_number);
     }
 
+    declare_parameter("depth.sensing_mode", 0);
     init_params.coordinate_system = sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD;
     init_params.coordinate_units = sl::UNIT::METER;
     init_params.depth_mode = static_cast<sl::DEPTH_MODE>(declare_parameter("depth.depth_mode", 0));
@@ -352,22 +353,25 @@ public:
   {
     RCLCPP_DEBUG(get_logger(), "run_grab started");
     sl::RuntimeParameters run_params;
-    run_params.sensing_mode = sl::SENSING_MODE::STANDARD;
-    run_params.enable_depth = false;
     run_params.measure3D_reference_frame = sl::REFERENCE_FRAME::CAMERA;
+    run_params.remove_saturated_areas = false;
 
     while (1) {
       if (!rclcpp::ok()) {
         break;
       }
-
+      static int frame_count = -1;
+      frame_count = (frame_count + 1) % get_parameter("general.publish_every").as_int();
+      bool publish = frame_count == 0;
+      run_params.sensing_mode = static_cast<sl::SENSING_MODE>(get_parameter("depth.sensing_mode").as_int());
+      run_params.enable_depth = publish && (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE);
       auto grab_status = zed_.grab(run_params);
       if (grab_status != sl::ERROR_CODE::SUCCESS) {
         RCLCPP_ERROR_STREAM(
           get_logger(), "Camera error: " << sl::toString(grab_status));
         break;
       }
-      retrieve_and_publish();
+      retrieve_and_publish(publish);
     }
     RCLCPP_DEBUG(get_logger(), "run_grab finished");
   }
@@ -452,7 +456,7 @@ public:
     }
   }
 
-  void retrieve_and_publish()
+  void retrieve_and_publish(bool publish)
   {
     auto base_camera_info = zed_.getCameraInformation();
     auto width = base_camera_info.camera_configuration.resolution.width;
@@ -487,9 +491,7 @@ public:
     }
 
     if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
-      retrieve_result = zed_.retrieveMeasure(
-        mat_depth, sl::MEASURE::DEPTH, sl::MEM::CPU,
-        camera_info.camera_configuration.resolution);
+      retrieve_result = zed_.retrieveMeasure(mat_depth, sl::MEASURE::DEPTH, sl::MEM::CPU);
       if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
         RCLCPP_ERROR(get_logger(), "Retrieve depth failed");
         return;
@@ -500,9 +502,7 @@ public:
       }
     }
 
-    static int frame_count = -1;
-    frame_count = (frame_count + 1) % get_parameter("general.publish_every").as_int();
-    if (frame_count > 0) {
+    if (!publish) {
       return;
     }
 
