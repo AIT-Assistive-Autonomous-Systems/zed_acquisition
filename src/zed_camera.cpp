@@ -41,6 +41,8 @@ private:
   image_transport::CameraPublisher pub_left_image_rect_color_;
   image_transport::CameraPublisher pub_right_image_rect_color_;
   image_transport::Publisher pub_left_depth_;
+  // extra camera info topic for when depth is published at a different resolution
+  rclcpp::Publisher<CameraInfo>::SharedPtr pub_depth_camera_info_;
 
   rclcpp::Publisher<Imu>::SharedPtr pub_imu_;
   rclcpp::Publisher<FluidPressure>::SharedPtr pub_atm_press_;
@@ -91,6 +93,8 @@ public:
     }
 
     declare_parameter("depth.sensing_mode", 0);
+    declare_parameter("depth.resolution.width", 0);
+    declare_parameter("depth.resolution.height", 0);
     init_params.coordinate_system = sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD;
     init_params.coordinate_units = sl::UNIT::METER;
     init_params.depth_mode = static_cast<sl::DEPTH_MODE>(declare_parameter("depth.depth_mode", 0));
@@ -482,16 +486,17 @@ public:
       return;
     }
 
-    retrieve_result = zed_.retrieveImage(
-      mat_right, sl::VIEW::RIGHT, sl::MEM::CPU,
-      camera_info.camera_configuration.resolution);
+    retrieve_result = zed_.retrieveImage(mat_right, sl::VIEW::RIGHT, sl::MEM::CPU);
     if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
       RCLCPP_ERROR(get_logger(), "Retrieve right failed");
       return;
     }
 
+    auto depth_width = get_parameter("depth.resolution.width").as_int();
+    auto depth_height = get_parameter("depth.resolution.height").as_int();
+    sl::Resolution depth_resolution(depth_width, depth_height);
     if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
-      retrieve_result = zed_.retrieveMeasure(mat_depth, sl::MEASURE::DEPTH, sl::MEM::CPU);
+      retrieve_result = zed_.retrieveMeasure(mat_depth, sl::MEASURE::DEPTH, sl::MEM::CPU, depth_resolution);
       if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
         RCLCPP_ERROR(get_logger(), "Retrieve depth failed");
         return;
@@ -531,6 +536,15 @@ public:
       depth_msg->header.frame_id = left_camera_optical_frame_;
       depth_msg->header.stamp = depth_ts;
       pub_left_depth_.publish(depth_msg);
+
+      if ((depth_resolution.width != 0 || depth_resolution.height != 0) && !pub_depth_camera_info_) {
+        pub_depth_camera_info_ = create_publisher<CameraInfo>("left/depth/camera_info", rclcpp::SensorDataQoS());
+      }
+      if (pub_depth_camera_info_) {
+        auto depth_camera_info = getCameraInfo(zed_.getCameraInformation(depth_resolution).camera_configuration.calibration_parameters, sl::SIDE::LEFT);
+        depth_camera_info->header = left_rect_msg->header;
+        pub_depth_camera_info_->publish(*depth_camera_info);
+      }
     }
   }
 
