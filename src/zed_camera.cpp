@@ -38,6 +38,8 @@ private:
   diagnostic_updater::Updater diagnostic_updater_;
   std::thread grab_thread_;
 
+  image_transport::CameraPublisher pub_left_image_color_;
+  image_transport::CameraPublisher pub_right_image_color_;
   image_transport::CameraPublisher pub_left_image_rect_color_;
   image_transport::CameraPublisher pub_right_image_rect_color_;
   image_transport::Publisher pub_left_depth_;
@@ -164,6 +166,12 @@ public:
         declare_parameter(ss.str(), 0);
       }
     }
+
+    pub_left_image_color_ = image_transport::create_camera_publisher(
+      this, "left/image_color", rmw_qos_profile_sensor_data);
+
+    pub_right_image_color_ = image_transport::create_camera_publisher(
+      this, "right/image_color", rmw_qos_profile_sensor_data);
 
     pub_left_image_rect_color_ = image_transport::create_camera_publisher(
       this, "left/image_rect_color", rmw_qos_profile_sensor_data);
@@ -475,20 +483,34 @@ public:
 
     auto calibration_params = camera_info.camera_configuration.calibration_parameters;
 
-    sl::Mat mat_left, mat_right, mat_depth;
+    sl::Mat mat_left, mat_right, mat_left_rect, mat_right_rect, mat_depth;
     sl::ERROR_CODE retrieve_result;
 
     retrieve_result = zed_.retrieveImage(
-      mat_left, sl::VIEW::LEFT, sl::MEM::CPU,
+      mat_left, sl::VIEW::LEFT_UNRECTIFIED, sl::MEM::CPU,
       camera_info.camera_configuration.resolution);
     if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
-      RCLCPP_ERROR(get_logger(), "Retrieve left failed");
+      RCLCPP_ERROR(get_logger(), "Retrieve left unrectified failed");
       return;
     }
 
     retrieve_result = zed_.retrieveImage(mat_right, sl::VIEW::RIGHT, sl::MEM::CPU);
     if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
-      RCLCPP_ERROR(get_logger(), "Retrieve right failed");
+      RCLCPP_ERROR(get_logger(), "Retrieve right unrectified failed");
+      return;
+    }
+
+    retrieve_result = zed_.retrieveImage(
+      mat_left_rect, sl::VIEW::LEFT, sl::MEM::CPU,
+      camera_info.camera_configuration.resolution);
+    if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
+      RCLCPP_ERROR(get_logger(), "Retrieve left rectified failed");
+      return;
+    }
+
+    retrieve_result = zed_.retrieveImage(mat_right_rect, sl::VIEW::RIGHT, sl::MEM::CPU);
+    if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
+      RCLCPP_ERROR(get_logger(), "Retrieve right rectified failed");
       return;
     }
 
@@ -511,18 +533,38 @@ public:
       return;
     }
 
-    auto left_ts = rclcpp::Time(mat_left.timestamp.getNanoseconds(), get_clock()->get_clock_type());
-    auto left_rect_msg = toMsg(mat_left);
+    // unrectified camera images
+    {
+        auto left_ts = rclcpp::Time(mat_left.timestamp.getNanoseconds(), get_clock()->get_clock_type());
+        auto left_msg = toMsg(mat_left);
+        left_msg->header.frame_id = left_camera_optical_frame_;
+        left_msg->header.stamp = left_ts;
+        auto left_camera_info = getCameraInfo(calibration_params, sl::SIDE::LEFT);
+        left_camera_info->header = left_msg->header;
+        pub_left_image_color_.publish(left_msg, left_camera_info);
+
+        auto right_ts =
+          rclcpp::Time(mat_right.timestamp.getNanoseconds(), get_clock()->get_clock_type());
+        auto right_msg = toMsg(mat_right);
+        right_msg->header.frame_id = right_camera_optical_frame_;
+        right_msg->header.stamp = right_ts;
+        auto right_camera_info = getCameraInfo(calibration_params, sl::SIDE::RIGHT);
+        right_camera_info->header = right_msg->header;
+        pub_right_image_color_.publish(right_msg, right_camera_info);
+    }
+
+    // rectified images
+    auto left_ts = rclcpp::Time(mat_left_rect.timestamp.getNanoseconds(), get_clock()->get_clock_type());
+    auto left_rect_msg = toMsg(mat_left_rect);
     left_rect_msg->header.frame_id = left_camera_optical_frame_;
     left_rect_msg->header.stamp = left_ts;
     auto left_camera_info = getCameraInfo(calibration_params, sl::SIDE::LEFT);
     left_camera_info->header = left_rect_msg->header;
     pub_left_image_rect_color_.publish(left_rect_msg, left_camera_info);
 
-
     auto right_ts =
-      rclcpp::Time(mat_right.timestamp.getNanoseconds(), get_clock()->get_clock_type());
-    auto right_rect_msg = toMsg(mat_right);
+      rclcpp::Time(mat_right_rect.timestamp.getNanoseconds(), get_clock()->get_clock_type());
+    auto right_rect_msg = toMsg(mat_right_rect);
     right_rect_msg->header.frame_id = right_camera_optical_frame_;
     right_rect_msg->header.stamp = right_ts;
     auto right_camera_info = getCameraInfo(calibration_params, sl::SIDE::RIGHT);
