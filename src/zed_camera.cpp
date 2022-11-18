@@ -626,14 +626,16 @@ public:
       left_raw_msg->header = left_rect_msg->header;
       auto left_camera_info_raw = getCameraInfo(calibration_params_raw, sl::SIDE::LEFT);
       left_camera_info_raw->header = left_raw_msg->header;
-      pub_left_image_rect_color_.publish(left_rect_msg, left_camera_info);
+      pub_left_image_raw_color_->publish(*left_raw_msg);
+      pub_left_camera_info_raw_->publish(*left_camera_info_raw);
     }
     if (pub_right_image_raw_color_) {
       auto right_raw_msg = toMsg(mat_right_raw);
       right_raw_msg->header = right_rect_msg->header;
       auto right_camera_info_raw = getCameraInfo(calibration_params_raw, sl::SIDE::RIGHT);
       right_camera_info_raw->header = right_raw_msg->header;
-      pub_right_image_rect_color_.publish(right_rect_msg, right_camera_info);
+      pub_right_image_raw_color_->publish(*right_raw_msg);
+      pub_right_camera_info_raw_->publish(*right_camera_info_raw);
     }
   }
 
