@@ -577,7 +577,9 @@ public:
 
     auto calibration_params = camera_info.camera_configuration.calibration_parameters;
 
-    auto left_ts = rclcpp::Time(mat_left_rect.timestamp.getNanoseconds(), get_clock()->get_clock_type());
+    auto left_ts = rclcpp::Time(
+      mat_left_rect.timestamp.getNanoseconds(),
+      get_clock()->get_clock_type());
     auto left_rect_msg = toMsg(mat_left_rect);
     left_rect_msg->header.frame_id = left_camera_optical_frame_;
     left_rect_msg->header.stamp = left_ts;
