@@ -32,52 +32,13 @@
 
 namespace zed_acquisition
 {
-/*!
- * \brief The CSmartMean class is used to
- * make a mobile window mean of a sequence of values
- * and reject outliers.
- * Tutorial:
- * https://www.myzhar.com/blog/tutorials/tutorial-exponential-weighted-average-good-moving-windows-average/
- */
-class SmartMean
-{
-public:
-  explicit SmartMean(int winSize);
-
-  int getValCount()
-  {
-    return mValCount;  ///< Return the number of values in the sequence
-  }
-
-  double getMean()
-  {
-    return mMean;  ///< Return the updated mean
-  }
-
-  /*!
-   * \brief addValue
-   * Add a value to the sequence
-   * \param val value to be added
-   * \return mean value
-   */
-  double addValue(double val);
-
-private:
-  int mWinSize;   ///< The size of the window (number of values ti evaluate)
-  int mValCount;  ///< The number of values in sequence
-
-  double mMeanCorr;  ///< Used for bias correction
-  double mMean;      ///< The mean of the last \ref mWinSize values
-
-  double mGamma;  ///< Weight value
-};
-
 /**
  * @brief Stop Timer used to measure time intervals
  *
  */
 class StopWatch
 {
+
 public:
   StopWatch();
 
@@ -87,27 +48,6 @@ public:
 private:
   std::chrono::steady_clock::time_point mStartTime;
 };
-
-SmartMean::SmartMean(int winSize)
-{
-  mValCount = 0;
-
-  mMeanCorr = 0.0;
-  mMean = 0.0;
-  mWinSize = winSize;
-
-  mGamma = (static_cast<double>(mWinSize) - 1.) / static_cast<double>(mWinSize);
-}
-
-double SmartMean::addValue(double val)
-{
-  mValCount++;
-
-  mMeanCorr = mGamma * mMeanCorr + (1. - mGamma) * val;
-  mMean = mMeanCorr / (1. - pow(mGamma, mValCount));
-
-  return mMean;
-}
 
 StopWatch::StopWatch()
 {
