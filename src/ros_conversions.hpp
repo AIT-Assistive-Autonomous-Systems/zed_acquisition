@@ -16,6 +16,7 @@
 
 #include <vector>
 #include <memory>
+#include <algorithm>
 #include <angles/angles.h>
 #include <rclcpp/time.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -86,6 +87,9 @@ std::shared_ptr<CameraInfo> getCameraInfo(
   } else if (side == sl::SIDE::RIGHT) {
     auto msg = toMsg(calibration_params.right_cam);
     auto baseline = calibration_params.getCameraBaseline();
+    auto matrix = calibration_params.stereo_transform.getRotationMatrix();
+    matrix.inverse();
+    std::copy(std::begin(matrix.r), std::end(matrix.r), std::begin(msg->r));
     msg->p[3] = static_cast<double>(-1 * calibration_params.right_cam.fx * baseline);
     return msg;
   } else {
