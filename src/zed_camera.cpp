@@ -164,6 +164,20 @@ public:
     diagnostic_updater_.add("ZED Diagnostic", this, &ZedCamera::callback_diagnostic);
     diagnostic_updater_.setHardwareID(hardware_id);
 
+    // declare roi params before setting callback, to set them atomically later
+    declare_parameters<int>(
+      "video.aec_agc_roi.left", {
+        {"x", 0},
+        {"y", 0},
+        {"width", 0},
+        {"height", 0}});
+    declare_parameters<int>(
+      "video.aec_agc_roi.right", {
+        {"x", 0},
+        {"y", 0},
+        {"width", 0},
+        {"height", 0}});
+
     callback_parameters_ =
       add_on_set_parameters_callback(std::bind(&ZedCamera::parameter_callback, this, _1));
 
@@ -178,15 +192,20 @@ public:
     declare_integer_range(get_node_parameters_interface(), "video.exposure", 80, 0, 100);
     declare_integer_range(get_node_parameters_interface(), "video.gain", 80, 0, 100);
     declare_parameter("video.aec_agc", true);
-    declare_parameter("video.auto_whitebalance", true);
 
-    for (const auto & field : {"x", "y", "width", "height"}) {
-      for (const auto & side : {"left", "right"}) {
-        std::stringstream ss;
-        ss << "video.aec_agc_roi." << side << "." << field;
-        declare_parameter(ss.str(), 0);
-      }
-    }
+    // trigger roi initialization after declaring them, to only set the rect once
+    std::map<std::string, rclcpp::Parameter> roi_param_map;
+    get_parameters("video.aec_agc_roi", roi_param_map);
+    std::vector<rclcpp::Parameter> roi_params;
+    roi_params.reserve(roi_param_map.size());
+    std::transform(
+      roi_param_map.begin(), roi_param_map.end(), std::back_inserter(
+        roi_params), [](const auto & item) {
+        return item.second;
+      });
+    parameter_callback(roi_params);
+
+    declare_parameter("video.auto_whitebalance", true);
 
     pub_left_image_rect_color_ = image_transport::create_camera_publisher(
       this, "left/image_rect_color", rmw_qos_profile_sensor_data);
@@ -332,27 +351,27 @@ public:
         zed_.setCameraSettings(sl::VIDEO_SETTINGS::CONTRAST, parameter.as_int());
       }
 
-      const std::string left_rect_prefix = "video.aec_agc_roi.left.";
+      static constexpr char left_rect_prefix[] = "video.aec_agc_roi.left.";
       if (parameter.get_name().find(left_rect_prefix) == 0) {
-        set_rect_parameter(parameter, left_rect_prefix.size(), aec_agc_roi_left_);
+        set_rect_parameter(parameter, sizeof(left_rect_prefix) - 1, aec_agc_roi_left_);
         roi_left_dirty = true;
       }
-      const std::string right_rect_prefix = "video.aec_agc_roi.right.";
+      static constexpr char right_rect_prefix[] = "video.aec_agc_roi.right.";
       if (parameter.get_name().find(right_rect_prefix) == 0) {
-        set_rect_parameter(parameter, right_rect_prefix.size(), aec_agc_roi_right_);
+        set_rect_parameter(parameter, sizeof(right_rect_prefix) - 1, aec_agc_roi_right_);
         roi_right_dirty = true;
       }
     }
 
     if (roi_left_dirty) {
       RCLCPP_INFO(
-        get_logger(), "Set AEC_AGX_ROI left to %lux%lu@(%lu,%lu)", aec_agc_roi_left_.width, aec_agc_roi_left_.height, aec_agc_roi_left_.x,
+        get_logger(), "Set AEC_AGX_ROI left to %lux%lu@(x=%lu,y=%lu)", aec_agc_roi_left_.width, aec_agc_roi_left_.height, aec_agc_roi_left_.x,
         aec_agc_roi_left_.y);
       zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, aec_agc_roi_left_, sl::SIDE::LEFT);
     }
     if (roi_right_dirty) {
       RCLCPP_INFO(
-        get_logger(), "Set AEC_AGX_ROI right to %lux%lu@(%lu,%lu)", aec_agc_roi_right_.width, aec_agc_roi_right_.height, aec_agc_roi_right_.x,
+        get_logger(), "Set AEC_AGX_ROI right to %lux%lu@(x=%lu,y=%lu)", aec_agc_roi_right_.width, aec_agc_roi_right_.height, aec_agc_roi_right_.x,
         aec_agc_roi_right_.y);
       zed_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, aec_agc_roi_right_, sl::SIDE::RIGHT);
     }
