@@ -34,6 +34,7 @@ namespace zed_acquisition
 {
 using namespace std::chrono_literals;
 using namespace std::placeholders;
+using diagnostic_msgs::msg::DiagnosticArray;
 
 class ZedCamera : public rclcpp::Node
 {
@@ -71,6 +72,8 @@ private:
   rclcpp::Publisher<Temperature>::SharedPtr pub_left_temp_;
   rclcpp::Publisher<Temperature>::SharedPtr pub_right_temp_;
 
+  rclcpp::Publisher<DiagnosticArray>::SharedPtr pub_device_information_;
+
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_parameters_;
   rclcpp::TimerBase::SharedPtr timer_sensor_publish_;
 
@@ -96,7 +99,6 @@ public:
 
     auto camera_id = declare_parameter("general.camera_id", 0);
     auto serial_number = declare_parameter("general.serial_number", 0);
-
 
     declare_parameter("general.publish_every", 1);
 
@@ -142,8 +144,10 @@ public:
       exit(EXIT_FAILURE);
     }
 
-    auto camera_info = zed_.getCameraInformation();
-    std::string camera_name = "zed2i";
+    auto zed_camera_information = zed_.getCameraInformation();
+    auto camera_name =
+      declare_parameter("general.camera_name", toString(zed_camera_information.camera_model));
+    auto hardware_id = "zed" + std::to_string(zed_camera_information.serial_number);
 
     left_camera_optical_frame_ = declare_parameter(
       "left_camera_optical_frame",
@@ -158,7 +162,7 @@ public:
     magnetometer_frame_ = declare_parameter("magnetometer_frame", camera_name + "_imu_link");
 
     diagnostic_updater_.add("ZED Diagnostic", this, &ZedCamera::callback_diagnostic);
-    diagnostic_updater_.setHardwareID("ZED camera");
+    diagnostic_updater_.setHardwareID(hardware_id);
 
     callback_parameters_ =
       add_on_set_parameters_callback(std::bind(&ZedCamera::parameter_callback, this, _1));
@@ -211,7 +215,34 @@ public:
         this, "left/depth", rmw_qos_profile_sensor_data);
     }
 
-    if (camera_info.camera_model != sl::MODEL::ZED) {
+    // publish information on connected camera once
+    auto camera_information_qos = rclcpp::QoS(1).transient_local().reliable();
+    pub_device_information_ = create_publisher<DiagnosticArray>(
+      "device_information", camera_information_qos);
+
+    DiagnosticArray device_information;
+    device_information.header.frame_id = left_camera_optical_frame_;
+    device_information.header.stamp = now();
+    device_information.status.resize(1);
+    device_information.status[0].name = "Camera information";
+    device_information.status[0].level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+    device_information.status[0].message = "ZED connected";
+    device_information.status[0].hardware_id = hardware_id;
+    device_information.status[0].values.resize(4);
+    device_information.status[0].values[0].key = "Serial number";
+    device_information.status[0].values[0].value = std::to_string(
+      zed_camera_information.serial_number);
+    device_information.status[0].values[1].key = "Model";
+    device_information.status[0].values[1].value = toString(zed_camera_information.camera_model);
+    device_information.status[0].values[2].key = "Camera firmware version";
+    device_information.status[0].values[2].value = std::to_string(
+      zed_camera_information.camera_firmware_version);
+    device_information.status[0].values[3].key = "Sensors firmware version";
+    device_information.status[0].values[3].value = std::to_string(
+      zed_camera_information.sensors_firmware_version);
+    pub_device_information_->publish(device_information);
+
+    if (zed_camera_information.camera_model != sl::MODEL::ZED) {
       pub_imu_ = create_publisher<Imu>("imu/data", rclcpp::SensorDataQoS());
       pub_imu_temp_ = create_publisher<Temperature>(
         "imu/temperature",

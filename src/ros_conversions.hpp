@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 #include <memory>
 #include <algorithm>
@@ -234,6 +235,17 @@ Image::SharedPtr toMsg(sl::Mat & img)
   }
   msg->data = std::vector<uint8_t>(data_ptr, data_ptr + size);
   return msg;
+}
+
+std::string toString(sl::MODEL & model)
+{
+  switch (model) {
+    case sl::MODEL::ZED: return "zed";
+    case sl::MODEL::ZED_M: return "zed_m";
+    case sl::MODEL::ZED2: return "zed2";
+    case sl::MODEL::ZED2i: return "zed2i";
+    default: throw std::invalid_argument("unknown sl::MODEL");
+  }
 }
 
 } // namespace zed_acquisition
