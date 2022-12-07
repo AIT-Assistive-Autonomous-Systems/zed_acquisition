@@ -132,6 +132,10 @@ public:
     init_params.depth_minimum_distance = declare_parameter("depth.minimum_distance", 0.2);
     init_params.depth_maximum_distance = declare_parameter("depth.maximum_distance", 10.0);
 
+    auto calibration_file = declare_parameter("general.optional_opencv_calibration_file", "");
+    if (!calibration_file.empty()) {
+      init_params.optional_opencv_calibration_file = calibration_file.c_str();
+    }
     init_params.camera_disable_self_calib = declare_parameter(
       "general.camera_disable_self_calib",
       false);
