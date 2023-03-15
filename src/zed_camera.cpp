@@ -61,6 +61,7 @@ private:
   rclcpp::Publisher<CameraInfo>::SharedPtr pub_right_camera_info_raw_;
 
   image_transport::Publisher pub_left_depth_;
+  image_transport::Publisher pub_left_disparity_;
   // extra camera info topic for when depth is published at a different resolution
   rclcpp::Publisher<CameraInfo>::SharedPtr pub_depth_camera_info_;
 
@@ -234,8 +235,13 @@ public:
     }
 
     if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
-      pub_left_depth_ = image_transport::create_publisher(
-        this, "left/depth", rmw_qos_profile_sensor_data);
+      if (declare_parameter("general.publish_depth", true)) {
+        pub_left_depth_ = image_transport::create_publisher(
+          this, "left/depth", rmw_qos_profile_sensor_data);
+      }if (declare_parameter("general.publish_disparity", false)) {
+        pub_left_disparity_ = image_transport::create_publisher(
+          this, "left/disparity", rmw_qos_profile_sensor_data);
+      }
     }
 
     // publish information on connected camera once
@@ -587,7 +593,7 @@ public:
     sl::Resolution depth_resolution(depth_width, depth_height);
 
     sl::Mat mat_depth;
-    if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
+    if (pub_left_depth_) {
       retrieve_result = zed_.retrieveMeasure(
         mat_depth, sl::MEASURE::DEPTH, sl::MEM::CPU,
         depth_resolution);
@@ -597,6 +603,21 @@ public:
       }
       if (mat_depth.getDataType() != sl::MAT_TYPE::F32_C1) {
         RCLCPP_ERROR(get_logger(), "depth image is not float32");
+        return;
+      }
+    }
+
+    sl::Mat mat_disparity;
+    if (pub_left_disparity_) {
+      retrieve_result = zed_.retrieveMeasure(
+        mat_disparity, sl::MEASURE::DISPARITY, sl::MEM::CPU,
+        depth_resolution);
+      if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
+        RCLCPP_ERROR(get_logger(), "Retrieve depth failed");
+        return;
+      }
+      if (mat_disparity.getDataType() != sl::MAT_TYPE::F32_C1) {
+        RCLCPP_ERROR(get_logger(), "disparity image is not float32");
         return;
       }
     }
@@ -650,27 +671,43 @@ public:
     right_camera_info->header = right_rect_msg->header;
     pub_right_image_rect_color_.publish(right_rect_msg, right_camera_info);
 
-    if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
+    if (pub_left_depth_) {
       auto depth_ts =
         rclcpp::Time(mat_depth.timestamp.getNanoseconds(), get_clock()->get_clock_type());
       auto depth_msg = toMsg(mat_depth);
       depth_msg->header.frame_id = left_camera_optical_frame_;
       depth_msg->header.stamp = depth_ts;
       pub_left_depth_.publish(depth_msg);
+    }
 
-      if ((depth_resolution.width != 0 || depth_resolution.height != 0) &&
-        !pub_depth_camera_info_)
-      {
-        pub_depth_camera_info_ = create_publisher<CameraInfo>(
-          "left/depth/camera_info",
-          rclcpp::SensorDataQoS());
-      }
-      if (pub_depth_camera_info_) {
-        auto depth_camera_info = getCameraInfo(
-          zed_.getCameraInformation(
-            depth_resolution).camera_configuration.calibration_parameters, sl::SIDE::LEFT);
-        depth_camera_info->header = left_rect_msg->header;
-        pub_depth_camera_info_->publish(*depth_camera_info);
+    if (pub_left_disparity_) {
+      auto disparity_ts =
+        rclcpp::Time(mat_disparity.timestamp.getNanoseconds(), get_clock()->get_clock_type());
+      auto disparity_msg = toMsg(mat_disparity);
+      disparity_msg->header.frame_id = left_camera_optical_frame_;
+      disparity_msg->header.stamp = disparity_ts;
+      pub_left_disparity_.publish(disparity_msg);
+    }
+
+
+    if (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE) {
+      if (depth_resolution.width != 0 || depth_resolution.height != 0) {
+        // when depth is enabled, but a resolution different from video is configured
+        // publish the camera info for the other resolution in a different namespace
+        // when properly remapped, this helps keep the convention of having the camera_info in the
+        // same namespace as the image define its intrinsics
+        if (!pub_depth_camera_info_) {
+          pub_depth_camera_info_ = create_publisher<CameraInfo>(
+            "left/depth/camera_info",
+            rclcpp::SensorDataQoS());
+        }
+        if (pub_depth_camera_info_) {
+          auto depth_camera_info = getCameraInfo(
+            zed_.getCameraInformation(
+              depth_resolution).camera_configuration.calibration_parameters, sl::SIDE::LEFT);
+          depth_camera_info->header = left_rect_msg->header;
+          pub_depth_camera_info_->publish(*depth_camera_info);
+        }
       }
     }
 
