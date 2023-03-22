@@ -186,7 +186,8 @@ public:
     callback_parameters_ =
       add_on_set_parameters_callback(std::bind(&ZedCamera::parameter_callback, this, _1));
 
-    declare_parameter("video.downsample_factor", 1.0);
+    declare_parameter("video.resolution.width", 0);
+    declare_parameter("video.resolution.height", 0);
 
     declare_integer_range(get_node_parameters_interface(), "video.brightness", 4, 0, 8);
     declare_integer_range(get_node_parameters_interface(), "video.contrast", 4, 0, 8);
@@ -559,30 +560,24 @@ public:
 
   void retrieve_and_publish(bool publish)
   {
-    auto base_camera_info = zed_.getCameraInformation();
-    auto width = base_camera_info.camera_configuration.resolution.width;
-    auto height = base_camera_info.camera_configuration.resolution.height;
-
-    auto downsample_factor = get_parameter("video.downsample_factor").as_double();
-
-    int v_w = static_cast<int>(width * downsample_factor);
-    int v_h = static_cast<int>(height * downsample_factor);
-    auto resolution = sl::Resolution(v_w, v_h);
+    auto resolution = sl::Resolution(
+      get_parameter("video.resolution.width").as_int(),
+      get_parameter("video.resolution.height").as_int());
     auto camera_info = zed_.getCameraInformation(resolution);
 
     sl::ERROR_CODE retrieve_result;
 
     sl::Mat mat_left_rect;
     retrieve_result = zed_.retrieveImage(
-      mat_left_rect, sl::VIEW::LEFT, sl::MEM::CPU,
-      camera_info.camera_configuration.resolution);
+      mat_left_rect, sl::VIEW::LEFT, sl::MEM::CPU, resolution);
     if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
       RCLCPP_ERROR(get_logger(), "Retrieve left failed");
       return;
     }
 
     sl::Mat mat_right_rect;
-    retrieve_result = zed_.retrieveImage(mat_right_rect, sl::VIEW::RIGHT, sl::MEM::CPU);
+    retrieve_result = zed_.retrieveImage(
+      mat_right_rect, sl::VIEW::RIGHT, sl::MEM::CPU, resolution);
     if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
       RCLCPP_ERROR(get_logger(), "Retrieve right failed");
       return;
@@ -595,8 +590,7 @@ public:
     sl::Mat mat_depth;
     if (pub_left_depth_) {
       retrieve_result = zed_.retrieveMeasure(
-        mat_depth, sl::MEASURE::DEPTH, sl::MEM::CPU,
-        depth_resolution);
+        mat_depth, sl::MEASURE::DEPTH, sl::MEM::CPU, depth_resolution);
       if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
         RCLCPP_ERROR(get_logger(), "Retrieve depth failed");
         return;
@@ -610,8 +604,7 @@ public:
     sl::Mat mat_disparity;
     if (pub_left_disparity_) {
       retrieve_result = zed_.retrieveMeasure(
-        mat_disparity, sl::MEASURE::DISPARITY, sl::MEM::CPU,
-        depth_resolution);
+        mat_disparity, sl::MEASURE::DISPARITY, sl::MEM::CPU, depth_resolution);
       if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
         RCLCPP_ERROR(get_logger(), "Retrieve depth failed");
         return;
@@ -626,8 +619,7 @@ public:
     if (pub_left_image_raw_color_) {
       rcpputils::assert_true(!!pub_left_camera_info_raw_);
       retrieve_result = zed_.retrieveImage(
-        mat_left_raw, sl::VIEW::LEFT_UNRECTIFIED, sl::MEM::CPU,
-        camera_info.camera_configuration.resolution);
+        mat_left_raw, sl::VIEW::LEFT_UNRECTIFIED, sl::MEM::CPU, resolution);
       if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
         RCLCPP_ERROR(get_logger(), "Retrieve left raw failed");
         return;
@@ -638,8 +630,7 @@ public:
     if (pub_right_image_raw_color_) {
       rcpputils::assert_true(!!pub_right_camera_info_raw_);
       retrieve_result = zed_.retrieveImage(
-        mat_right_raw, sl::VIEW::RIGHT_UNRECTIFIED, sl::MEM::CPU,
-        camera_info.camera_configuration.resolution);
+        mat_right_raw, sl::VIEW::RIGHT_UNRECTIFIED, sl::MEM::CPU, resolution);
       if (retrieve_result != sl::ERROR_CODE::SUCCESS) {
         RCLCPP_ERROR(get_logger(), "Retrieve right raw failed");
         return;
