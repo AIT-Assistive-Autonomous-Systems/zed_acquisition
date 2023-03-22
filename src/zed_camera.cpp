@@ -473,7 +473,9 @@ public:
           get_logger(), "Camera error: " << sl::toString(grab_status));
         break;
       }
-      retrieve_and_publish(publish);
+      if (publish) {
+        retrieve_and_publish();
+      }
     }
     RCLCPP_DEBUG(get_logger(), "run_grab finished");
   }
@@ -558,7 +560,7 @@ public:
     }
   }
 
-  void retrieve_and_publish(bool publish)
+  void retrieve_and_publish()
   {
     auto resolution = sl::Resolution(
       get_parameter("video.resolution.width").as_int(),
@@ -635,10 +637,6 @@ public:
         RCLCPP_ERROR(get_logger(), "Retrieve right raw failed");
         return;
       }
-    }
-
-    if (!publish) {
-      return;
     }
 
     auto calibration_params = camera_info.camera_configuration.calibration_parameters;
