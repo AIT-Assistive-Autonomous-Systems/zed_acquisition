@@ -114,7 +114,7 @@ public:
       init_params.input.setFromSerialNumber(serial_number);
     }
 
-    declare_parameter("depth.sensing_mode", 0);
+    declare_parameter("depth.enable_fill_mode", false);
     declare_parameter("depth.resolution.width", 0);
     declare_parameter("depth.resolution.height", 0);
     init_params.coordinate_system = sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD;
@@ -143,16 +143,19 @@ public:
     init_params.enable_image_enhancement = declare_parameter(
       "general.enable_image_enhancement",
       true);
+    init_params.open_timeout_sec = declare_parameter(
+      "general.open_timeout_sec",
+      5.0);
     init_params.enable_right_side_measure = false;
 
     if (!startCamera(init_params)) {
       exit(EXIT_FAILURE);
     }
 
-    auto zed_camera_information = zed_.getCameraInformation();
+    auto camera_information = zed_.getCameraInformation();
     auto camera_name =
-      declare_parameter("general.camera_name", toString(zed_camera_information.camera_model));
-    auto hardware_id = "zed" + std::to_string(zed_camera_information.serial_number);
+      declare_parameter("general.camera_name", toString(camera_information.camera_model));
+    auto hardware_id = "zed" + std::to_string(camera_information.serial_number);
 
     left_camera_optical_frame_ = declare_parameter(
       "left_camera_optical_frame",
@@ -239,7 +242,8 @@ public:
       if (declare_parameter("general.publish_depth", true)) {
         pub_left_depth_ = image_transport::create_publisher(
           this, "left/depth", rmw_qos_profile_sensor_data);
-      }if (declare_parameter("general.publish_disparity", false)) {
+      }
+      if (declare_parameter("general.publish_disparity", false)) {
         pub_left_disparity_ = image_transport::create_publisher(
           this, "left/disparity", rmw_qos_profile_sensor_data);
       }
@@ -261,18 +265,20 @@ public:
     device_information.status[0].values.resize(4);
     device_information.status[0].values[0].key = "Serial number";
     device_information.status[0].values[0].value = std::to_string(
-      zed_camera_information.serial_number);
+      camera_information.serial_number);
     device_information.status[0].values[1].key = "Model";
-    device_information.status[0].values[1].value = toString(zed_camera_information.camera_model);
+    device_information.status[0].values[1].value = toString(camera_information.camera_model);
     device_information.status[0].values[2].key = "Camera firmware version";
     device_information.status[0].values[2].value = std::to_string(
-      zed_camera_information.camera_firmware_version);
+      camera_information.camera_configuration.firmware_version);
+
     device_information.status[0].values[3].key = "Sensors firmware version";
     device_information.status[0].values[3].value = std::to_string(
-      zed_camera_information.sensors_firmware_version);
+      camera_information.sensors_configuration.firmware_version);
+
     pub_device_information_->publish(device_information);
 
-    if (zed_camera_information.camera_model != sl::MODEL::ZED) {
+    if (camera_information.camera_model != sl::MODEL::ZED) {
       pub_imu_ = create_publisher<Imu>("imu/data", rclcpp::SensorDataQoS());
       pub_imu_temp_ = create_publisher<Temperature>(
         "imu/temperature",
@@ -394,44 +400,24 @@ public:
     RCLCPP_DEBUG(get_logger(), "Camera opening");
 
     thread_stop_ = false;
-    StopWatch connect_timer;
 
-    auto camera_timeout = declare_parameter("general.camera_timeout", 5.0);
-    auto camera_max_reconnect_attempts = declare_parameter(
-      "general.camera_max_reconnect_attempts",
-      3);
-
-    while (1) {
-      std::this_thread::sleep_for(500ms);
-      auto connection_status = zed_.open(init_params);
-
-      if (connection_status == sl::ERROR_CODE::SUCCESS) {
-        RCLCPP_INFO(get_logger(), "Camera opened");
-        break;
-      }
-
-      RCLCPP_WARN(
+    auto connection_status = zed_.open(init_params);
+    if (connection_status == sl::ERROR_CODE::SUCCESS) {
+      RCLCPP_INFO(get_logger(), "Camera opened");
+    } else {
+      RCLCPP_ERROR(
         get_logger(),
         "Error opening camera: %s",
         sl::toString(connection_status).c_str());
+      return false;
+    }
 
-      if (connection_status == sl::ERROR_CODE::CAMERA_DETECTION_ISSUE) {
-        RCLCPP_INFO(get_logger(), "Please verify the USB3 connection");
-      }
-
-      if (!rclcpp::ok() || thread_stop_) {
-        RCLCPP_INFO(get_logger(), "ZED activation interrupted");
-        return false;
-      }
-      if (connect_timer.toc() > camera_max_reconnect_attempts * camera_timeout) {
-        RCLCPP_ERROR(get_logger(), "Camera detection timeout");
-        return false;
-      }
-      std::this_thread::sleep_for(std::chrono::duration<double>(camera_timeout));
+    if (!rclcpp::ok() || thread_stop_) {
+      RCLCPP_INFO(get_logger(), "ZED activation interrupted");
+      return false;
     }
 
     const auto & camera_info = zed_.getCameraInformation();
-
     RCLCPP_INFO_STREAM(
       get_logger(), "Camera model '" << sl::toString(
         camera_info.camera_model) << "'");
@@ -463,8 +449,7 @@ public:
       static int frame_count = -1;
       frame_count = (frame_count + 1) % get_parameter("general.publish_every").as_int();
       bool publish = frame_count == 0;
-      run_params.sensing_mode =
-        static_cast<sl::SENSING_MODE>(get_parameter("depth.sensing_mode").as_int());
+      run_params.enable_fill_mode = get_parameter("depth.enable_fill_mode").as_bool();
       run_params.enable_depth = publish &&
         (zed_.getInitParameters().depth_mode != sl::DEPTH_MODE::NONE);
       auto grab_status = zed_.grab(run_params);
